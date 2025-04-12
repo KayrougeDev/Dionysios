@@ -9,6 +9,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.scheduler.BukkitTask;
 
 import javax.annotation.Nullable;
 import java.util.HashMap;
@@ -31,7 +32,6 @@ public class Game implements Listener {
     public Game(GameManager manager, GameSettings settings) {
         this.manager = manager;
         this.settings = settings;
-        setStateAndCall(GState.WAITING);
     }
 
     public boolean isState(GState state) {
@@ -79,6 +79,7 @@ public class Game implements Listener {
     }
 
     public void playerJoin(Player player, boolean isSpectator) {
+        if(players.containsKey(player.getUniqueId())) return;
         if(isState(GState.WAITING) && getPlayerCount(GRole.PLAYER) < settings.getMaxPlayerCount() && !isSpectator) {
             players.put(player.getUniqueId(), GRole.PLAYER);
         }
@@ -98,6 +99,7 @@ public class Game implements Listener {
 
         AtomicInteger remainTimeBeforeStart = new AtomicInteger(10);
         Bukkit.getScheduler().runTaskTimer(manager.PLUGIN, bukkitTask -> {
+            checkAndStop(bukkitTask);
             int playerCount = getPlayerCount(GRole.PLAYER);
             if(getPlayerCount(GRole.PLAYER) < settings.getMinPlayerCount()) {
                 sendMessageToAllPlayer("Canceling game launch because a player quit the game ("+playerCount+"/"+settings.getMinPlayerCount()+" players)");
@@ -159,6 +161,14 @@ public class Game implements Listener {
 
     public int getTotalPlayerCount() {
         return players.size();
+    }
+
+    public boolean checkAndStop(BukkitTask task) {
+        if(isState(GState.FINISHED) || isState(GState.TERMINATED)) {
+            task.cancel();
+            return true;
+        }
+        return false;
     }
 
     public void setStateAndCall(GState state) {
