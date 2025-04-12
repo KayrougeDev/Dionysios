@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+}
+
+group = 'fr.kayrouge'
+version = '1.0'
+
+repositories {
+    mavenCentral()
+    maven { url "https://maven.mohistmc.com/" }
+}
+
+dependencies {
+    implementation 'com.mohistmc:mohistdev:1.16.5'
+    compileOnly("org.projectlombok:lombok:1.18.38")
+    annotationProcessor("org.projectlombok:lombok:1.18.38")
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
