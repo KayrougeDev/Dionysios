@@ -184,7 +184,12 @@ public class Game implements Listener {
 
     public boolean checkPlayerAndStop() {
         if(getPlayerCount(GRole.PLAYER) == 0 && !isState(GState.WAITING) && !this.isState(GState.FINISHED) && !this.isState(GState.TERMINATED)) {
-            setStateAndCall(GState.FINISHED);
+            if(getPlayerCount(GRole.SPECTATOR) == 0) {
+                setStateAndCall(GState.TERMINATED);
+            }
+            else {
+                setStateAndCall(GState.FINISHED);
+            }
             return true;
         }
         return false;
