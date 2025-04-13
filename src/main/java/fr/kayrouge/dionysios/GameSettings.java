@@ -17,8 +17,6 @@ public class GameSettings {
     private int id;
     private boolean isIdDefine = false;
 
-    private boolean tpAfterGameTerminated = true;
-
     /**
 
     Use $TIMELEFT to use time left before terminated

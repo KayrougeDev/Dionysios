@@ -3,7 +3,6 @@ package fr.kayrouge.dionysios;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -12,15 +11,14 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 
 import javax.annotation.Nullable;
-import java.util.HashMap;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 public class Game implements Listener {
 
     protected final HashMap<UUID, GRole> players = new HashMap<>();
-
 
     @Getter
     @Setter
@@ -62,37 +60,31 @@ public class Game implements Listener {
                      sendMessageToAllPlayer(settings.getGameFinishedMessage().replace("$TIMELEFT", String.valueOf(time)));
                  }
              }
-        }, 0, settings.getTimeToTerminate() * 20L);
+        }, 0, 20L);
     }
 
     public void onGameTerminated() {
+        getPlayers().forEach(this::playerQuit);
+
         manager.deleteGame(settings.getId());
-        if(settings.isTpAfterGameTerminated()) {
-            players.forEach((uuid, gRole) -> {
-                Player player = Bukkit.getPlayer(uuid);
-                if(player != null) {
-                    Location location = manager.getAfterGameLocation();
-                    if(location != null) {
-                        player.teleport(location);
-                    }
-                }
-            });
-        }
     }
 
-    public void playerJoin(Player player, boolean isSpectator) {
+    public void playerJoin(Player player, AtomicBoolean isSpectator) {
         if(players.containsKey(player.getUniqueId())) return;
-        if(isState(GState.WAITING) && getPlayerCount(GRole.PLAYER) < settings.getMaxPlayerCount() && !isSpectator) {
+        if((isState(GState.WAITING) || isState(GState.PRESTART)) && getPlayerCount(GRole.PLAYER) < settings.getMaxPlayerCount() && !isSpectator.get()) {
             players.put(player.getUniqueId(), GRole.PLAYER);
         }
         else {
             players.put(player.getUniqueId(), GRole.SPECTATOR);
+            isSpectator.set(true);
         }
         player.getPersistentDataContainer().set(manager.PLAYER_GAME_KEY, PersistentDataType.INTEGER, settings.getId());
         sendMessageToAllPlayer(player.getDisplayName()+" has joined the game ("+getPlayerCount(GRole.PLAYER)+"/"+settings.getMaxPlayerCount()+")");
 
         if(getPlayerCount(GRole.PLAYER) >= settings.getMinPlayerCount()) {
-            startCounter();
+            if(isState(GState.WAITING)) {
+                setStateAndCall(GState.PRESTART);
+            }
         }
     }
 
@@ -101,24 +93,23 @@ public class Game implements Listener {
         if(role == null || role == GRole.SPECTATOR) return;
 
         players.put(player.getUniqueId(), GRole.SPECTATOR);
-        checkplayerAndStop();
+        checkPlayerAndStop();
     }
 
-    public void startCounter() {
-        if(!isState(GState.WAITING)) return;
-
+    public void preStart() {
         AtomicInteger remainTimeBeforeStart = new AtomicInteger(10);
         Bukkit.getScheduler().runTaskTimer(manager.PLUGIN, bukkitTask -> {
             if(checkAndStop(bukkitTask)) return;
             int playerCount = getPlayerCount(GRole.PLAYER);
             if(getPlayerCount(GRole.PLAYER) < settings.getMinPlayerCount()) {
-                sendMessageToAllPlayer("Canceling game launch because a player quit the game ("+playerCount+"/"+settings.getMinPlayerCount()+" players)");
+                sendMessageToAllPlayer("Canceling game launch because a player quit the game ("+playerCount+"/"+settings.getMinPlayerCount()+" players required)");
                 bukkitTask.cancel();
+                setStateAndCall(GState.WAITING);
                 return;
             }
 
             if(remainTimeBeforeStart.get() > 0) {
-                sendMessageToAllPlayer("Game starting in "+remainTimeBeforeStart.getAndDecrement()+" seconds ("+playerCount+"/"+settings.getMinPlayerCount()+" players)");
+                sendMessageToAllPlayer("Game starting in "+remainTimeBeforeStart.getAndDecrement()+" seconds ("+playerCount+"/"+settings.getMaxPlayerCount()+" players)");
             }
             else {
                 bukkitTask.cancel();
@@ -132,20 +123,21 @@ public class Game implements Listener {
         players.remove(player.getUniqueId());
         player.getPersistentDataContainer().remove(manager.PLAYER_GAME_KEY);
 
-        checkplayerAndStop();
+        if(this.manager.getAfterGameLocation() != null) {
+            player.teleport(this.manager.getAfterGameLocation());
+        }
+
+        checkPlayerAndStop();
     }
 
     public void sendMessageToAllPlayer(String message) {
-        players.forEach((uuid, role) -> {
-            Player player = Bukkit.getPlayer(uuid);
-            if(player != null) {
-                player.sendMessage(message);
-            }
-        });
+        getPlayers().forEach(player -> player.sendMessage(message));
     }
 
     @EventHandler
     public void onQuitServer(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if(!players.containsKey(player.getUniqueId())) return;
         playerQuit(event.getPlayer());
     }
 
@@ -163,8 +155,19 @@ public class Game implements Listener {
         return (int)players.values().stream().filter(gRole -> gRole == role).count();
     }
 
-    public Stream<UUID> getPlayers(GRole role) {
-        return players.keySet().stream().filter(uuid -> players.get(uuid) == role);
+    public List<Player> getPlayersByRole(GRole role) {
+        return players.keySet().stream()
+                .filter(uuid -> players.get(uuid) == role)
+                .map(Bukkit::getPlayer)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    public List<Player> getPlayers() {
+        return players.keySet().stream()
+                .map(Bukkit::getPlayer)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     public int getTotalPlayerCount() {
@@ -179,8 +182,8 @@ public class Game implements Listener {
         return false;
     }
 
-    public boolean checkplayerAndStop() {
-        if(getPlayerCount(GRole.PLAYER) == 0 && !isState(GState.WAITING)) {
+    public boolean checkPlayerAndStop() {
+        if(getPlayerCount(GRole.PLAYER) == 0 && !isState(GState.WAITING) && !this.isState(GState.FINISHED) && !this.isState(GState.TERMINATED)) {
             setStateAndCall(GState.FINISHED);
             return true;
         }
@@ -192,6 +195,9 @@ public class Game implements Listener {
         switch (state) {
             case WAITING:
                 onGameWaiting();
+                break;
+            case PRESTART:
+                preStart();
                 break;
             case STARTING:
                 onGameStarting();
