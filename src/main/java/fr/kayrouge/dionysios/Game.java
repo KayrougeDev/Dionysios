@@ -58,7 +58,9 @@ public class Game implements Listener {
              int time = timer.getAndDecrement();
 
              if(time == 30 || time == 15 || time < 11) {
-                 sendMessageToAllPlayer("Game finished, automatic quitting in "+time+" seconds.");
+                 if(!settings.getGameFinishedMessage().isEmpty()) {
+                     sendMessageToAllPlayer(settings.getGameFinishedMessage().replace("$TIMELEFT", String.valueOf(time)));
+                 }
              }
         }, 0, settings.getTimeToTerminate() * 20L);
     }
@@ -87,11 +89,19 @@ public class Game implements Listener {
             players.put(player.getUniqueId(), GRole.SPECTATOR);
         }
         player.getPersistentDataContainer().set(manager.PLAYER_GAME_KEY, PersistentDataType.INTEGER, settings.getId());
-        sendMessageToAllPlayer(player.getDisplayName()+" has joined the game ("+getPlayerCount(GRole.PLAYER)+"/"+settings.getMinPlayerCount()+")");
+        sendMessageToAllPlayer(player.getDisplayName()+" has joined the game ("+getPlayerCount(GRole.PLAYER)+"/"+settings.getMaxPlayerCount()+")");
 
         if(getPlayerCount(GRole.PLAYER) >= settings.getMinPlayerCount()) {
             startCounter();
         }
+    }
+
+    public void lose(Player player) {
+        GRole role = getRole(player);
+        if(role == null || role == GRole.SPECTATOR) return;
+
+        players.put(player.getUniqueId(), GRole.SPECTATOR);
+        checkplayerAndStop();
     }
 
     public void startCounter() {
@@ -99,7 +109,7 @@ public class Game implements Listener {
 
         AtomicInteger remainTimeBeforeStart = new AtomicInteger(10);
         Bukkit.getScheduler().runTaskTimer(manager.PLUGIN, bukkitTask -> {
-            checkAndStop(bukkitTask);
+            if(checkAndStop(bukkitTask)) return;
             int playerCount = getPlayerCount(GRole.PLAYER);
             if(getPlayerCount(GRole.PLAYER) < settings.getMinPlayerCount()) {
                 sendMessageToAllPlayer("Canceling game launch because a player quit the game ("+playerCount+"/"+settings.getMinPlayerCount()+" players)");
@@ -122,9 +132,7 @@ public class Game implements Listener {
         players.remove(player.getUniqueId());
         player.getPersistentDataContainer().remove(manager.PLAYER_GAME_KEY);
 
-        if(getPlayerCount(GRole.PLAYER) == 0 && !isState(GState.WAITING)) {
-            setStateAndCall(GState.FINISHED);
-        }
+        checkplayerAndStop();
     }
 
     public void sendMessageToAllPlayer(String message) {
@@ -166,6 +174,14 @@ public class Game implements Listener {
     public boolean checkAndStop(BukkitTask task) {
         if(isState(GState.FINISHED) || isState(GState.TERMINATED)) {
             task.cancel();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean checkplayerAndStop() {
+        if(getPlayerCount(GRole.PLAYER) == 0 && !isState(GState.WAITING)) {
+            setStateAndCall(GState.FINISHED);
             return true;
         }
         return false;
