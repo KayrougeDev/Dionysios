@@ -91,9 +91,12 @@ public class Game implements Listener {
     public void lose(Player player) {
         GRole role = getRole(player);
         if(role == null || role == GRole.SPECTATOR) return;
-
+        quitOrLose(player);
         players.put(player.getUniqueId(), GRole.SPECTATOR);
         checkPlayerAndStop();
+    }
+
+    public void quitOrLose(Player player) {
     }
 
     public void preStart() {
@@ -120,6 +123,7 @@ public class Game implements Listener {
     }
 
     public void playerQuit(Player player) {
+        quitOrLose(player);
         players.remove(player.getUniqueId());
         player.getPersistentDataContainer().remove(manager.PLAYER_GAME_KEY);
 
