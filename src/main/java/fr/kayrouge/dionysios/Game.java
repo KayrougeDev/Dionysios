@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-public class Game implements Listener {
+public abstract class Game implements Listener {
 
     protected final HashMap<UUID, GRole> players = new HashMap<>();
 
