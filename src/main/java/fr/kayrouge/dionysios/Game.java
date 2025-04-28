@@ -187,7 +187,7 @@ public abstract class Game implements Listener {
     }
 
     public boolean checkPlayerAndStop() {
-        if(getPlayerCount(GRole.PLAYER) == 0 && !isState(GState.WAITING) && !this.isState(GState.FINISHED) && !this.isState(GState.TERMINATED)) {
+        if(getPlayerCount(GRole.PLAYER) <= this.settings.getMinPlayerToStopGame() && !isState(GState.WAITING) && !this.isState(GState.FINISHED) && !this.isState(GState.TERMINATED)) {
             if(getPlayerCount(GRole.SPECTATOR) == 0) {
                 setStateAndCall(GState.TERMINATED);
             }

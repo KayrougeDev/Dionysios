@@ -1,5 +1,6 @@
 package fr.kayrouge.dionysios;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -10,11 +11,14 @@ import lombok.experimental.Accessors;
 public class GameSettings {
 
     private int minPlayerCount = 1;
-    private int minPlayerToStopGame = 0;
+    private int minPlayerToStopGame = 1;
     private int maxPlayerCount = 15;
     private long timeToTerminate = 30L;
 
     private int id;
+
+    @Setter(AccessLevel.NONE)
+    @Getter(AccessLevel.NONE)
     private boolean isIdDefine = false;
 
     /**
